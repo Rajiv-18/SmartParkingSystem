@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Bookings - Smart Parking System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">Smart Parking System</h1>
+            <ul class="nav-links">
+                <li><a href="/">Live Dashboard</a></li>
+                <li><a href="/booking">Book Now</a></li>
+                <li><a href="/my-bookings" class="active">My Bookings</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h2>My Reservations</h2>
+                <p>View and manage your parking spots</p>
+            </div>
+        </div>
+    </section>
+
+    <div class="container">
+        <div class="user-selector-wrapper">
+            <label for="user-select"><strong>Select Your Profile:</strong></label>
+            <select id="user-select">
+                <option value="">-- Select User --</option>
+            </select>
+        </div>
+
+        <section class="bookings-section">
+            <h3>Booking History</h3>
+            <div style="overflow-x: auto;">
+                <table id="bookings-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Parking Lot</th>
+                            <th>Slot</th>
+                            <th>Date & Time</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bookings-tbody">
+                        <tr>
+                            <td colspan="7" style="text-align: center;">Select a user to view bookings</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Load users on startup
+        fetch('/api/users')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const select = document.getElementById('user-select');
+                    
+                    // Check if we have a saved user in localStorage
+                    const savedUserId = localStorage.getItem('parkingUserId');
+                    
+                    data.data.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.id;
+                        option.textContent = `${user.username}`;
+                        select.appendChild(option);
+                        
+                        // Auto-select if matched
+                        if (savedUserId && parseInt(savedUserId) === user.id) {
+                            option.selected = true;
+                            loadUserBookings(user.id);
+                        }
+                    });
+                }
+            });
+
+        // Handle user change
+        document.getElementById('user-select').addEventListener('change', function() {
+            const userId = this.value;
+            if (userId) {
+                localStorage.setItem('parkingUserId', userId); // Persist selection
+                loadUserBookings(userId);
+            } else {
+                document.getElementById('bookings-tbody').innerHTML = '<tr><td colspan="7" style="text-align: center;">Select a user to view bookings</td></tr>';
+            }
+        });
+
+        function loadUserBookings(userId) {
+            const tbody = document.getElementById('bookings-tbody');
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Loading...</td></tr>';
+
+            fetch(`/api/users/${userId}/bookings`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayBookings(data.data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Error loading bookings</td></tr>';
+                });
+        }
+
+        function displayBookings(bookings) {
+            const tbody = document.getElementById('bookings-tbody');
+            tbody.innerHTML = '';
+
+            if (bookings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No bookings found for this user.</td></tr>';
+                return;
+            }
+
+            bookings.forEach(booking => {
+                const start = new Date(booking.start_time).toLocaleString();
+                let statusBadge = `<span class="status-badge status-${booking.status}">${booking.status.toUpperCase()}</span>`;
+                
+                let actionBtn = '-';
+                if (booking.status === 'active') {
+                    actionBtn = `<button class="btn btn-danger" onclick="cancelBookingHandler(${booking.id})">Cancel</button>`;
+                }
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>#${booking.id}</td>
+                    <td>${booking.parking_lot_name}</td>
+                    <td><strong>${booking.slot_number}</strong></td>
+                    <td>${start}</td>
+                    <td>$${booking.total_price.toFixed(2)}</td>
+                    <td>${statusBadge}</td>
+                    <td>${actionBtn}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function cancelBookingHandler(bookingId) {
+            if(!confirm('Are you sure you want to cancel this booking?')) return;
+
+            fetch(`/api/bookings/${bookingId}/cancel`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Booking cancelled successfully.');
+                        // Refresh list
+                        const userId = document.getElementById('user-select').value;
+                        loadUserBookings(userId);
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
