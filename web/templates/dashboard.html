@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Smart Parking System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🅿️ Smart Parking System</h1>
+            <ul class="nav-links">
+                <li><a href="/">Home</a></li>
+                <li><a href="/dashboard" class="active">Dashboard</a></li>
+                <li><a href="/booking">Book Now</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="dashboard-header">
+            <h2>Parking Availability Dashboard</h2>
+            <p>Real-time monitoring of parking spaces across all locations</p>
+            <button id="refresh-btn" class="btn btn-primary">🔄 Refresh Data</button>
+        </section>
+
+        <section class="pricing-section">
+            <h3>Current Pricing</h3>
+            <div style="overflow-x: auto;">
+                <table id="pricing-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Place</th>
+                            <th>Location</th>
+                            <th>Pricing per Hour</th>
+                            <th>Status</th>
+                            <th>Occupancy</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pricing-tbody">
+                        <tr>
+                            <td colspan="5" style="text-align: center;">Loading pricing data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="parking-lots-section">
+            <h3>Parking Lots Overview</h3>
+            <div style="overflow-x: auto;">
+                <table id="lots-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Parking Lot</th>
+                            <th>Location</th>
+                            <th>Available Spots</th>
+                            <th>Total Spots</th>
+                            <th>Occupancy Rate</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lots-tbody">
+                        <tr>
+                            <td colspan="6" style="text-align: center;">Loading parking lots...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Smart Parking System</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    
+    <script>
+        let autoRefresh = null;
+
+        function loadDashboard() {
+            console.log("🔄 Refreshing dashboard data..."); // Added for debugging
+            updateParkingData(); 
+            updatePricingData();
+        }
+
+        function updateParkingData() {
+            fetch('/api/parking-lots')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayParkingLots(data.data);
+                    }
+                })
+                .catch(error => console.error('Error loading parking lots:', error));
+        }
+
+        function updatePricingData() {
+            fetch('/api/pricing')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayPricing(data.data);
+                    }
+                })
+                .catch(error => console.error('Error loading pricing:', error));
+        }
+
+        function displayParkingLots(lots) {
+            const tbody = document.getElementById('lots-tbody');
+            tbody.innerHTML = '';
+
+            if (lots.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No parking lots available</td></tr>';
+                return;
+            }
+
+            lots.forEach(lot => {
+                const occupancyClass = lot.occupancy_rate > 80 ? 'high' : lot.occupancy_rate > 50 ? 'medium' : 'low';
+                const statusText = lot.available_slots > 10 ? 'Available' : lot.available_slots > 0 ? 'Limited' : 'Full';
+                const statusClass = lot.available_slots > 10 ? 'status-available' : lot.available_slots > 0 ? 'status-limited' : 'status-full';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${lot.name}</strong></td>
+                    <td>${lot.location}</td>
+                    <td><strong>${lot.available_slots}</strong></td>
+                    <td>${lot.total_slots}</td>
+                    <td><span class="occupancy-badge occupancy-${occupancyClass}">${lot.occupancy_rate}%</span></td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function displayPricing(pricingData) {
+            const tbody = document.getElementById('pricing-tbody');
+            tbody.innerHTML = '';
+
+            if (pricingData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No pricing data available</td></tr>';
+                return;
+            }
+
+            pricingData.forEach(pricing => {
+                const statusText = pricing.is_peak_hour ? 'Peak Hour' : 'Off-Peak';
+                const statusClass = pricing.is_peak_hour ? 'status-peak' : 'status-offpeak';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${pricing.parking_lot_name}</strong></td>
+                    <td>${pricing.location || 'N/A'}</td>
+                    <td><strong>$${pricing.current_price.toFixed(2)}</strong>/hour</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>${pricing.occupancy_rate.toFixed(1)}%</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Event Listener for the button
+        const refreshBtn = document.getElementById('refresh-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                loadDashboard();
+                // Visual feedback that button was clicked
+                refreshBtn.textContent = "Refreshing...";
+                setTimeout(() => refreshBtn.textContent = "🔄 Refresh Data", 500);
+            });
+        } else {
+            console.error("Refresh button not found!");
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+
+        // Auto-refresh every 10 seconds
+        autoRefresh = setInterval(loadDashboard, 10000);
+    </script>
+</body>
+</html>

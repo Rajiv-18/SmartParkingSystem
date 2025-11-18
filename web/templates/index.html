@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">Smart Parking System</h1>
+            <ul class="nav-links">
+                <li><a href="/" class="active">Live Dashboard</a></li>
+                <li><a href="/booking">Book Now</a></li>
+                <li><a href="/my-bookings">My Bookings</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h2>Real-Time Parking Availability</h2>
+                <p>Distributed IoT Monitoring & Dynamic Pricing System</p>
+                <div class="cta-buttons">
+                    <a href="/booking" class="btn btn-secondary">Reserve a Spot</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="container">
+        <section class="pricing-section">
+            <h3>Live Pricing Feed</h3>
+            <div style="overflow-x: auto;">
+                <table id="pricing-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Place</th>
+                            <th>Location</th>
+                            <th>Pricing per Hour</th>
+                            <th>Status</th>
+                            <th>Occupancy</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pricing-tbody">
+                        <tr>
+                            <td colspan="5" style="text-align: center;">Connecting to Cloud Server...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="parking-lots-section">
+            <h3>Lot Status Overview</h3>
+            <div style="overflow-x: auto;">
+                <table id="lots-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Parking Lot</th>
+                            <th>Location</th>
+                            <th>Available Spots</th>
+                            <th>Total Spots</th>
+                            <th>Occupancy Rate</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lots-tbody">
+                        <tr>
+                            <td colspan="6" style="text-align: center;">Connecting to Cloud Server...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        let autoRefresh = null;
+        let previousState = {}; // Store previous availability to detect changes
+
+        function updateDashboard() {
+            updateParkingData();
+            updatePricingData();
+        }
+
+        function updateParkingData() {
+            fetch('/api/parking-lots')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayParkingLots(data.data);
+                    }
+                })
+                .catch(error => console.error('Error syncing parking lots:', error));
+        }
+
+        function updatePricingData() {
+            fetch('/api/pricing')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayPricing(data.data);
+                    }
+                })
+                .catch(error => console.error('Error syncing pricing:', error));
+        }
+
+        function displayParkingLots(lots) {
+            const tbody = document.getElementById('lots-tbody');
+            
+            // If first load, clear body
+            if (Object.keys(previousState).length === 0) {
+                tbody.innerHTML = '';
+            }
+
+            lots.forEach(lot => {
+                // Check for changes
+                let flashClass = '';
+                const prev = previousState[lot.id];
+                
+                if (prev !== undefined) {
+                    if (lot.available_slots > prev) {
+                        flashClass = 'flash-green'; // Someone left, spot opened
+                    } else if (lot.available_slots < prev) {
+                        flashClass = 'flash-red'; // Someone parked, spot lost
+                    }
+                }
+                
+                // Update state
+                previousState[lot.id] = lot.available_slots;
+
+                // Determine text status
+                const occupancyClass = lot.occupancy_rate > 80 ? 'high' : lot.occupancy_rate > 50 ? 'medium' : 'low';
+                let statusText = 'Open';
+                let statusClass = 'status-available';
+                
+                if (lot.available_slots === 0) {
+                    statusText = 'Full';
+                    statusClass = 'status-full';
+                } else if (lot.available_slots < 3) {
+                    statusText = 'Limited';
+                    statusClass = 'status-limited';
+                }
+
+                // Construct row HTML
+                const rowHtml = `
+                    <td><strong>${lot.name}</strong></td>
+                    <td>${lot.location}</td>
+                    <td class="${flashClass}"><strong>${lot.available_slots}</strong></td>
+                    <td>${lot.total_slots}</td>
+                    <td><span class="occupancy-badge occupancy-${occupancyClass}">${lot.occupancy_rate}%</span></td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                `;
+
+                // Check if row exists to update, or create new
+                let existingRow = document.getElementById(`lot-row-${lot.id}`);
+                if (existingRow) {
+                    existingRow.innerHTML = rowHtml;
+                } else {
+                    const row = document.createElement('tr');
+                    row.id = `lot-row-${lot.id}`;
+                    row.innerHTML = rowHtml;
+                    tbody.appendChild(row);
+                }
+            });
+        }
+
+        function displayPricing(pricingData) {
+            const tbody = document.getElementById('pricing-tbody');
+            // We wipe and redraw pricing table as it doesn't need complex animation state
+            tbody.innerHTML = '';
+
+            pricingData.forEach(pricing => {
+                const statusText = pricing.is_peak_hour ? 'Peak Hour' : 'Standard';
+                const statusClass = pricing.is_peak_hour ? 'status-peak' : 'status-offpeak';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${pricing.parking_lot_name}</strong></td>
+                    <td>${pricing.location || 'N/A'}</td>
+                    <td><strong>$${pricing.current_price.toFixed(2)}</strong>/hour</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>${pricing.occupancy_rate.toFixed(1)}%</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Initial load
+        updateDashboard();
+        autoRefresh = setInterval(updateDashboard, 2000);
+    </script>
+</body>
+</html>

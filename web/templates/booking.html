@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Parking - Smart Parking System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">Smart Parking System</h1>
+            <ul class="nav-links">
+                <li><a href="/">Live Dashboard</a></li>
+                <li><a href="/booking" class="active">Book Now</a></li>
+                <li><a href="/my-bookings">My Bookings</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="booking-section">
+            <div class="booking-container">
+                <div class="booking-form">
+                    <h3>Reserve Your Spot</h3>
+                    
+                    <form id="booking-form">
+                        <div class="form-group">
+                            <label for="user-select">Select Team Member:</label>
+                            <select id="user-select" required>
+                                <option value="">-- Choose User --</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lot-select">Select Parking Lot:</label>
+                            <select id="lot-select" required>
+                                <option value="">-- Choose Parking Lot --</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="slot-select">Select Parking Slot:</label>
+                            <select id="slot-select" required>
+                                <option value="">-- Choose Slot --</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="duration">Duration (hours):</label>
+                            <input type="number" id="duration" min="1" max="24" value="2" required>
+                        </div>
+
+                        <div class="pricing-summary">
+                            <h4>Pricing Summary</h4>
+                            <div class="summary-item">
+                                <span>Price per Hour:</span>
+                                <span id="price-per-hour">$0.00</span>
+                            </div>
+                            <div class="summary-item">
+                                <span>Duration:</span>
+                                <span id="duration-display">0 hours</span>
+                            </div>
+                            <div class="summary-item total">
+                                <span>Total Cost:</span>
+                                <span id="total-cost">$0.00</span>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-large">Confirm Booking</button>
+                    </form>
+                </div>
+                </div>
+        </section>
+
+        <div id="booking-result" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <div id="result-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        let currentPricing = {};
+        // NEW: Get the max price passed from the backend
+        const MAX_PRICE = {{ max_price }}; 
+
+        // Load users
+        fetch('/api/users')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const select = document.getElementById('user-select');
+                    data.data.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.id;
+                        option.textContent = `${user.username} (${user.phone})`;
+                        select.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => console.error('Error loading users:', error));
+
+        // Load parking lots
+        fetch('/api/parking-lots')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const select = document.getElementById('lot-select');
+                    data.data.forEach(lot => {
+                        const option = document.createElement('option');
+                        option.value = lot.id;
+                        option.textContent = `${lot.name} (${lot.available_slots} available)`;
+                        select.appendChild(option);
+                    });
+                }
+            });
+
+        // Load pricing
+        fetch('/api/pricing')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    data.data.forEach(pricing => {
+                        currentPricing[pricing.parking_lot_id] = pricing.current_price;
+                    });
+                }
+            });
+
+        // Load slots when lot is selected
+        document.getElementById('lot-select').addEventListener('change', function() {
+            const lotId = this.value;
+            const slotSelect = document.getElementById('slot-select');
+            slotSelect.innerHTML = '<option value="">-- Choose Slot --</option>';
+
+            if (lotId) {
+                fetch(`/api/available-slots?lot_id=${lotId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            data.data.forEach(slot => {
+                                const option = document.createElement('option');
+                                option.value = slot.id;
+                                option.textContent = slot.slot_number;
+                                slotSelect.appendChild(option);
+                            });
+                        }
+                    });
+
+                updatePricingSummary();
+            }
+        });
+
+        // Update pricing when duration changes
+        document.getElementById('duration').addEventListener('input', updatePricingSummary);
+
+        function updatePricingSummary() {
+            const lotId = document.getElementById('lot-select').value;
+            const duration = parseFloat(document.getElementById('duration').value) || 0;
+            const pricePerHour = currentPricing[lotId] || 0;
+            
+            // CHANGED: Calculate total and apply cap
+            let rawTotal = pricePerHour * duration;
+            let totalCost = rawTotal;
+            let isCapped = false;
+
+            if (totalCost > MAX_PRICE) {
+                totalCost = MAX_PRICE;
+                isCapped = true;
+            }
+
+            document.getElementById('price-per-hour').textContent = `$${pricePerHour.toFixed(2)}`;
+            document.getElementById('duration-display').textContent = `${duration} hour${duration !== 1 ? 's' : ''}`;
+            
+            const totalEl = document.getElementById('total-cost');
+            totalEl.textContent = `$${totalCost.toFixed(2)}`;
+            
+            // NEW: Visual indicator if price is capped
+            if (isCapped) {
+                totalEl.innerHTML += ` <span style="font-size: 0.8rem; color: #f59e0b;">(Daily Max)</span>`;
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('booking-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const lotId = document.getElementById('lot-select').value;
+            const lockedPrice = currentPricing[lotId] || 0;
+
+            const bookingData = {
+                user_id: parseInt(document.getElementById('user-select').value),
+                slot_id: parseInt(document.getElementById('slot-select').value),
+                duration_hours: parseFloat(document.getElementById('duration').value),
+                price_per_hour: lockedPrice
+            };
+
+            fetch('/api/bookings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(bookingData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                showBookingResult(data);
+            })
+            .catch(error => {
+                showBookingResult({
+                    success: false,
+                    error: 'Failed to create booking: ' + error.message
+                });
+            });
+        });
+
+        function showBookingResult(data) {
+            const modal = document.getElementById('booking-result');
+            const message = document.getElementById('result-message');
+
+            if (data.success) {
+                message.innerHTML = `
+                    <div class="success-message">
+                        <h3 style="color: #10b981; margin-bottom: 1rem;">Booking Confirmed!</h3>
+                        <p><strong>Booking ID:</strong> ${data.data.booking_id}</p>
+                        <p><strong>Slot:</strong> ${data.data.slot_number}</p>
+                        <p><strong>Duration:</strong> ${data.data.duration_hours} hour(s)</p>
+                        <p><strong>Total Cost:</strong> $${data.data.total_price.toFixed(2)}</p>
+                    </div>
+                `;
+                
+                if (data.success) {
+                    // Auto-select this user for the My Bookings page
+                    localStorage.setItem('parkingUserId', document.getElementById('user-select').value);
+                    
+                    setTimeout(() => {
+                        location.href = "/my-bookings";
+                    }, 2000);
+                }
+
+            } else {
+                message.innerHTML = `
+                    <div class="error-message">
+                        <h3 style="color: #ef4444; margin-bottom: 1rem;">Booking Failed</h3>
+                        <p>${data.error}</p>
+                    </div>
+                `;
+            }
+
+            modal.style.display = 'block';
+        }
+
+        document.querySelector('.close').addEventListener('click', function() {
+            document.getElementById('booking-result').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
