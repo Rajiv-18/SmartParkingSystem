@@ -470,6 +470,57 @@ def get_users():
         logger.error(f"Error fetching users: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/booking-init-data', methods=['GET'])
+def get_booking_init_data():
+    """Get all data needed for booking page initialization in one request"""
+    try:
+        with db_manager.session_scope() as session:
+            # 1. Get Users (FIX: Manual serialization instead of to_dict)
+            users_query = session.query(User).all()
+            users = []
+            for u in users_query:
+                users.append({
+                    'id': u.id,
+                    'username': u.username,
+                    'phone': u.phone,
+                    'email': u.email
+                })
+            
+            # 2. Get Parking Lots (FIX: Manual serialization)
+            lots_query = session.query(ParkingLot).all()
+            lots = []
+            for l in lots_query:
+                lots.append({
+                    'id': l.id,
+                    'name': l.name,
+                    'location': l.location,
+                    'available_slots': l.available_slots,
+                    'total_slots': l.total_slots
+                })
+            
+            # 3. Get Pricing
+            pricing_data = []
+            lot_stats = db_manager.get_parking_lot_stats()
+            
+            for lot_stat in lot_stats:
+                price, is_peak = pricing_engine.calculate_price(lot_stat['occupancy_rate'])
+                pricing_data.append({
+                    'parking_lot_id': lot_stat['id'],
+                    'current_price': price,
+                    'is_peak_hour': is_peak
+                })
+
+        return jsonify({
+            'success': True, 
+            'data': {
+                'users': users,
+                'parking_lots': lots,
+                'pricing': pricing_data
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error fetching booking init data: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 def initialize_server():
     """Initialize the cloud server"""

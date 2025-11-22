@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book Parking - Smart Parking System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
     <nav class="navbar">
         <div class="container">
@@ -23,7 +25,7 @@
             <div class="booking-container">
                 <div class="booking-form">
                     <h3>Reserve Your Spot</h3>
-                    
+
                     <form id="booking-form">
                         <div class="form-group">
                             <label for="user-select">Select Team Member:</label>
@@ -70,7 +72,7 @@
                         <button type="submit" class="btn btn-primary btn-large">Confirm Booking</button>
                     </form>
                 </div>
-                </div>
+            </div>
         </section>
 
         <div id="booking-result" class="modal" style="display: none;">
@@ -85,52 +87,45 @@
     <script>
         let currentPricing = {};
         // NEW: Get the max price passed from the backend
-        const MAX_PRICE = {{ max_price }}; 
+        const MAX_PRICE = {{ max_price }};
 
-        // Load users
-        fetch('/api/users')
+        console.log("🚀 Fetching booking data...");
+        fetch('/api/booking-init-data')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const select = document.getElementById('user-select');
-                    data.data.forEach(user => {
+                    const { users, parking_lots, pricing } = data.data;
+
+                    // 1. Populate Users
+                    const userSelect = document.getElementById('user-select');
+                    users.forEach(user => {
                         const option = document.createElement('option');
                         option.value = user.id;
-                        option.textContent = `${user.username} (${user.phone})`;
-                        select.appendChild(option);
+                        option.textContent = `${user.username} (${user.phone || 'N/A'})`;
+                        userSelect.appendChild(option);
                     });
-                }
-            })
-            .catch(error => console.error('Error loading users:', error));
 
-        // Load parking lots
-        fetch('/api/parking-lots')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const select = document.getElementById('lot-select');
-                    data.data.forEach(lot => {
+                    // 2. Populate Parking Lots
+                    const lotSelect = document.getElementById('lot-select');
+                    parking_lots.forEach(lot => {
                         const option = document.createElement('option');
                         option.value = lot.id;
                         option.textContent = `${lot.name} (${lot.available_slots} available)`;
-                        select.appendChild(option);
+                        lotSelect.appendChild(option);
                     });
-                }
-            });
 
-        // Load pricing
-        fetch('/api/pricing')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    data.data.forEach(pricing => {
-                        currentPricing[pricing.parking_lot_id] = pricing.current_price;
+                    // 3. Store Pricing Data
+                    pricing.forEach(p => {
+                        currentPricing[p.parking_lot_id] = p.current_price;
                     });
+
+                    console.log("✅ All booking data loaded!");
                 }
-            });
+            })
+            .catch(error => console.error('Error loading booking data:', error));
 
         // Load slots when lot is selected
-        document.getElementById('lot-select').addEventListener('change', function() {
+        document.getElementById('lot-select').addEventListener('change', function () {
             const lotId = this.value;
             const slotSelect = document.getElementById('slot-select');
             slotSelect.innerHTML = '<option value="">-- Choose Slot --</option>';
@@ -160,7 +155,7 @@
             const lotId = document.getElementById('lot-select').value;
             const duration = parseFloat(document.getElementById('duration').value) || 0;
             const pricePerHour = currentPricing[lotId] || 0;
-            
+
             // CHANGED: Calculate total and apply cap
             let rawTotal = pricePerHour * duration;
             let totalCost = rawTotal;
@@ -173,10 +168,10 @@
 
             document.getElementById('price-per-hour').textContent = `$${pricePerHour.toFixed(2)}`;
             document.getElementById('duration-display').textContent = `${duration} hour${duration !== 1 ? 's' : ''}`;
-            
+
             const totalEl = document.getElementById('total-cost');
             totalEl.textContent = `$${totalCost.toFixed(2)}`;
-            
+
             // NEW: Visual indicator if price is capped
             if (isCapped) {
                 totalEl.innerHTML += ` <span style="font-size: 0.8rem; color: #f59e0b;">(Daily Max)</span>`;
@@ -184,7 +179,7 @@
         }
 
         // Handle form submission
-        document.getElementById('booking-form').addEventListener('submit', function(e) {
+        document.getElementById('booking-form').addEventListener('submit', function (e) {
             e.preventDefault();
 
             const lotId = document.getElementById('lot-select').value;
@@ -204,16 +199,16 @@
                 },
                 body: JSON.stringify(bookingData)
             })
-            .then(response => response.json())
-            .then(data => {
-                showBookingResult(data);
-            })
-            .catch(error => {
-                showBookingResult({
-                    success: false,
-                    error: 'Failed to create booking: ' + error.message
+                .then(response => response.json())
+                .then(data => {
+                    showBookingResult(data);
+                })
+                .catch(error => {
+                    showBookingResult({
+                        success: false,
+                        error: 'Failed to create booking: ' + error.message
+                    });
                 });
-            });
         });
 
         function showBookingResult(data) {
@@ -230,11 +225,11 @@
                         <p><strong>Total Cost:</strong> $${data.data.total_price.toFixed(2)}</p>
                     </div>
                 `;
-                
+
                 if (data.success) {
                     // Auto-select this user for the My Bookings page
                     localStorage.setItem('parkingUserId', document.getElementById('user-select').value);
-                    
+
                     setTimeout(() => {
                         location.href = "/my-bookings";
                     }, 2000);
@@ -252,9 +247,10 @@
             modal.style.display = 'block';
         }
 
-        document.querySelector('.close').addEventListener('click', function() {
+        document.querySelector('.close').addEventListener('click', function () {
             document.getElementById('booking-result').style.display = 'none';
         });
     </script>
 </body>
+
 </html>

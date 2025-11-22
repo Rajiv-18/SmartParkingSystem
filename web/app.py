@@ -138,6 +138,19 @@ def cancel_booking(booking_id):
     except Exception as e:
         logger.error(f"Error cancelling booking: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+
+@app.route('/api/booking-init-data', methods=['GET'])
+def get_booking_init_data():
+    """Proxy request to cloud server"""
+    try:
+        # We use the bundled endpoint we just created
+        response = requests.get(f"{CLOUD_API}/booking-init-data", timeout=10)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        logger.error(f"Error fetching booking init data: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
 
 def run_web_app():
     """Run the web application"""

@@ -80,7 +80,7 @@
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
         let autoRefresh = null;
-        let previousState = {}; // Store previous availability to detect changes
+        let previousState = {}; 
 
         function updateDashboard() {
             updateParkingData();
@@ -92,6 +92,8 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
+                        // NEW: Save to browser cache
+                        localStorage.setItem('cached_parking_lots', JSON.stringify(data.data));
                         displayParkingLots(data.data);
                     }
                 })
@@ -103,6 +105,8 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
+                        // NEW: Save to browser cache
+                        localStorage.setItem('cached_pricing', JSON.stringify(data.data));
                         displayPricing(data.data);
                     }
                 })
@@ -112,28 +116,26 @@
         function displayParkingLots(lots) {
             const tbody = document.getElementById('lots-tbody');
             
-            // If first load, clear body
-            if (Object.keys(previousState).length === 0) {
+            // If body is empty (first load), clear the "Connecting..." message
+            if (tbody.innerHTML.includes('Connecting')) {
                 tbody.innerHTML = '';
             }
 
             lots.forEach(lot => {
-                // Check for changes
+                // Check for changes (Flash Logic)
                 let flashClass = '';
                 const prev = previousState[lot.id];
                 
                 if (prev !== undefined) {
                     if (lot.available_slots > prev) {
-                        flashClass = 'flash-green'; // Someone left, spot opened
+                        flashClass = 'flash-green'; 
                     } else if (lot.available_slots < prev) {
-                        flashClass = 'flash-red'; // Someone parked, spot lost
+                        flashClass = 'flash-red'; 
                     }
                 }
                 
-                // Update state
                 previousState[lot.id] = lot.available_slots;
 
-                // Determine text status
                 const occupancyClass = lot.occupancy_rate > 80 ? 'high' : lot.occupancy_rate > 50 ? 'medium' : 'low';
                 let statusText = 'Open';
                 let statusClass = 'status-available';
@@ -146,7 +148,7 @@
                     statusClass = 'status-limited';
                 }
 
-                // Construct row HTML
+                // CHANGED: Added 'lot-row' class for easier selection
                 const rowHtml = `
                     <td><strong>${lot.name}</strong></td>
                     <td>${lot.location}</td>
@@ -156,7 +158,6 @@
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 `;
 
-                // Check if row exists to update, or create new
                 let existingRow = document.getElementById(`lot-row-${lot.id}`);
                 if (existingRow) {
                     existingRow.innerHTML = rowHtml;
@@ -171,7 +172,7 @@
 
         function displayPricing(pricingData) {
             const tbody = document.getElementById('pricing-tbody');
-            // We wipe and redraw pricing table as it doesn't need complex animation state
+            // Simple wipe and redraw for pricing
             tbody.innerHTML = '';
 
             pricingData.forEach(pricing => {
@@ -190,8 +191,28 @@
             });
         }
 
-        // Initial load
+        // NEW: Load Cached Data Immediately
+        function loadFromCache() {
+            const cachedLots = localStorage.getItem('cached_parking_lots');
+            const cachedPricing = localStorage.getItem('cached_pricing');
+
+            if (cachedLots) {
+                console.log("⚡ Loading parking from cache...");
+                displayParkingLots(JSON.parse(cachedLots));
+            }
+            if (cachedPricing) {
+                console.log("⚡ Loading pricing from cache...");
+                displayPricing(JSON.parse(cachedPricing));
+            }
+        }
+
+        // 1. Load Cache (Instant)
+        loadFromCache();
+
+        // 2. Fetch Fresh Data (Async)
         updateDashboard();
+
+        // 3. Keep Refreshing
         autoRefresh = setInterval(updateDashboard, 2000);
     </script>
 </body>
