@@ -47,72 +47,6 @@ class DatabaseManager:
         finally:
             session.close()
             
-    def initialize_parking_lots(self):
-        """Initialize parking lots with slots"""
-        with self.session_scope() as session:
-            # Check if already initialized
-            existing = session.query(ParkingLot).first()
-            if existing:
-                logger.info("Parking lots already initialized")
-                return
-
-            # CHANGED: Specific Ontario Tech Locations
-            founders_lots = [
-                {"name": "Founders 1", "location": "Ontario Tech North Oshawa Campus"},
-                {"name": "Founders 2", "location": "Ontario Tech North Oshawa Campus"},
-                {"name": "Founders 3", "location": "Ontario Tech North Oshawa Campus"},
-                {"name": "Founders 4", "location": "Ontario Tech North Oshawa Campus"},
-                {"name": "Founders 5", "location": "Ontario Tech North Oshawa Campus"}
-            ]
-
-            # Create parking lots
-            for i, lot_data in enumerate(founders_lots):
-                lot_num = i + 1
-                parking_lot = ParkingLot(
-                    name=lot_data["name"],
-                    location=lot_data["location"],
-                    total_slots=config.SLOTS_PER_LOT,
-                    available_slots=config.SLOTS_PER_LOT,
-                    gateway_id=f"gateway_{lot_num}"
-                )
-                session.add(parking_lot)
-                session.flush()
-
-                # Create parking slots for each lot
-                for slot_num in range(1, config.SLOTS_PER_LOT + 1):
-                    # CHANGED: Format F<Lot>-<Slot> (e.g., F1-01)
-                    slot_label = f"F{lot_num}-{slot_num:02d}"
-                    
-                    slot = ParkingSlot(
-                        slot_number=slot_label,
-                        parking_lot_id=parking_lot.id,
-                        is_occupied=False,
-                        sensor_id=f"sensor_{lot_num}_{slot_num:03d}"
-                    )
-                    session.add(slot)
-
-            logger.info(f"Initialized {len(founders_lots)} Founders parking lots")
-
-    def initialize_test_users(self):
-        """Create test users for the system"""
-        with self.session_scope() as session:
-            # Check if users exist
-            existing = session.query(User).first()
-            if existing:
-                logger.info("Test users already exist")
-                return
-                
-            test_users = [
-                User(username="john_doe", email="john@example.com", phone="555-0101"),
-                User(username="jane_smith", email="jane@example.com", phone="555-0102"),
-                User(username="bob_wilson", email="bob@example.com", phone="555-0103"),
-            ]
-            
-            for user in test_users:
-                session.add(user)
-                
-            logger.info(f"Created {len(test_users)} test users")
-            
     def get_available_slots(self, parking_lot_id=None):
         """Get all available parking slots"""
         with self.session_scope() as session:
@@ -138,7 +72,7 @@ class DatabaseManager:
             if slot:
                 old_status = slot.is_occupied
                 slot.is_occupied = is_occupied
-                slot.last_updated = datetime.now() # CHANGED: utcnow -> now
+                slot.last_updated = datetime.now()
                 
                 # Update parking lot available slots
                 parking_lot = slot.parking_lot
@@ -159,7 +93,7 @@ class DatabaseManager:
                 logger.info(f"Updated slot {slot.slot_number}: occupied={is_occupied}")
                 return True
             return False
-
+            
     def get_parking_lot_stats(self):
         """Get statistics for all parking lots"""
         with self.session_scope() as session:
@@ -182,8 +116,3 @@ class DatabaseManager:
 
 # Global database manager instance
 db_manager = DatabaseManager()
-# Optimized session handling
-
-# Optimized session handling
-
-# Optimized session handling

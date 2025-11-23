@@ -11,7 +11,7 @@ CLOUD_HOST = 'localhost'
 
 # Parking Lot Configuration
 NUM_PARKING_LOTS = 5
-SLOTS_PER_LOT = 10
+SLOTS_PER_LOT = 6
 TOTAL_SLOTS = NUM_PARKING_LOTS * SLOTS_PER_LOT
 
 # Dynamic Pricing Configuration
@@ -22,12 +22,12 @@ PEAK_HOURS = [(7, 10), (16, 19)]
 MAX_DAILY_PRICE = 25.0  # Maximum price cap per booking
 
 # Sensor Simulation Configuration
-SENSOR_UPDATE_INTERVAL = 2  
+SENSOR_UPDATE_INTERVAL = 3  
 OCCUPANCY_CHANGE_PROBABILITY = 0.2
 
 # Gateway Configuration
 GATEWAY_CACHE_SIZE = 100
-GATEWAY_SYNC_INTERVAL = 10  # seconds
+GATEWAY_SYNC_INTERVAL = 4  # seconds
 
 # System Configuration
 DEBUG_MODE = True

@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 class RegionalGateway:
     """Regional gateway for processing sensor data"""
     
-    def __init__(self, gateway_id, parking_lot_id, cloud_url):
+    def __init__(self, gateway_id, region_name, cloud_url):
         self.gateway_id = gateway_id
-        self.parking_lot_id = parking_lot_id
+        self.region_name = region_name
         self.cloud_url = cloud_url
         
         # Edge caching for fault tolerance
@@ -119,7 +119,7 @@ class RegionalGateway:
         """Get gateway statistics"""
         return {
             'gateway_id': self.gateway_id,
-            'parking_lot_id': self.parking_lot_id,
+            'region': self.region_name,
             'total_received': self.total_received,
             'total_forwarded': self.total_forwarded,
             'total_errors': self.total_errors,
@@ -138,20 +138,36 @@ class RegionalGateway:
 app = Flask(__name__)
 CORS(app)
 
-# Dictionary to store gateway instances
+# Dictionary to store gateway instances by GATEWAY_ID
 gateways = {}
 
 
 def get_gateway(lot_id):
-    """Get or create gateway for parking lot"""
-    if lot_id not in gateways:
-        gateway_id = f"gateway_{lot_id}"
+    """
+    Get or create gateway for parking lot based on Region.
+    Lots 1 & 2 -> Near Campus Gateway
+    Lots 3, 4, 5 -> Far Campus Gateway
+    """
+    
+    # 1. Determine which Region this lot belongs to
+    if lot_id <= 2:
+        gateway_id = "gateway_near"
+        region_name = "Near Campus Region"
+    else:
+        gateway_id = "gateway_far"
+        region_name = "Far Campus Region"
+
+    # 2. Create the Gateway Instance if it doesn't exist yet
+    if gateway_id not in gateways:
         cloud_url = f"http://{config.CLOUD_HOST}:{config.CLOUD_SERVER_PORT}"
-        gateway = RegionalGateway(gateway_id, lot_id, cloud_url)
+        
+        gateway = RegionalGateway(gateway_id, region_name, cloud_url)
         gateway.start_sync_thread()
-        gateways[lot_id] = gateway
-        logger.info(f"Created gateway for parking lot {lot_id}")
-    return gateways[lot_id]
+        gateways[gateway_id] = gateway
+        
+        logger.info(f"Initialized Regional Gateway: {gateway_id} ({region_name})")
+
+    return gateways[gateway_id]
 
 
 @app.route('/gateway/<int:lot_id>/sensor-data', methods=['POST'])
@@ -159,6 +175,7 @@ def receive_sensor_data(lot_id):
     """Receive sensor data from IoT devices"""
     try:
         data = request.json
+        # This will auto-route to the correct regional gateway
         gateway = get_gateway(lot_id)
         
         success = gateway.process_sensor_data(data)
@@ -199,7 +216,8 @@ def health_check():
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
         'service': 'Regional Gateway Server',
-        'active_gateways': len(gateways)
+        'active_gateways': len(gateways),
+        'regions': list(gateways.keys())
     })
 
 
@@ -210,4 +228,3 @@ def run_gateway_server():
 
 if __name__ == '__main__':
     run_gateway_server()
-    
