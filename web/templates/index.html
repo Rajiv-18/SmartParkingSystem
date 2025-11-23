@@ -31,45 +31,24 @@
     </section>
 
     <div class="container">
-        <section class="pricing-section">
-            <h3>Live Pricing Feed</h3>
+        <section class="dashboard-section" style="margin-top: 2rem;">
+            <h3>Live Campus Parking Status</h3>
             <div style="overflow-x: auto;">
-                <table id="pricing-table" class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Place</th>
-                            <th>Location</th>
-                            <th>Pricing per Hour</th>
-                            <th>Status</th>
-                            <th>Occupancy</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pricing-tbody">
-                        <tr>
-                            <td colspan="5" style="text-align: center;">Connecting to Cloud Server...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="parking-lots-section">
-            <h3>Lot Status Overview</h3>
-            <div style="overflow-x: auto;">
-                <table id="lots-table" class="data-table">
+                <table id="main-table" class="data-table">
                     <thead>
                         <tr>
                             <th>Parking Lot</th>
                             <th>Location</th>
-                            <th>Available Spots</th>
-                            <th>Total Spots</th>
-                            <th>Occupancy Rate</th>
+                            <th>Availability</th>
+                            <th>Occupancy</th>
                             <th>Status</th>
+                            <th>Current Price</th>
+                            <th>Rate Type</th>
                         </tr>
                     </thead>
-                    <tbody id="lots-tbody">
+                    <tbody id="main-tbody">
                         <tr>
-                            <td colspan="6" style="text-align: center;">Connecting to Cloud Server...</td>
+                            <td colspan="7" style="text-align: center;">Connecting to Distributed Cloud...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -81,65 +60,64 @@
     <script>
         let autoRefresh = null;
         let previousState = {}; 
+        
+        // Store data globally so we can merge them
+        let latestLots = [];
+        let latestPricing = {};
 
         function updateDashboard() {
-            updateParkingData();
-            updatePricingData();
+            // Fetch both endpoints in parallel
+            Promise.all([
+                fetch('/api/parking-lots').then(res => res.json()),
+                fetch('/api/pricing').then(res => res.json())
+            ]).then(([lotsData, pricingData]) => {
+                
+                if (lotsData.success) {
+                    latestLots = lotsData.data;
+                    localStorage.setItem('cached_parking_lots', JSON.stringify(latestLots));
+                }
+                
+                if (pricingData.success) {
+                    // Convert pricing array to a map for easier lookup: { lot_id: price_obj }
+                    latestPricing = {};
+                    pricingData.data.forEach(p => {
+                        latestPricing[p.parking_lot_id] = p;
+                    });
+                    localStorage.setItem('cached_pricing', JSON.stringify(pricingData.data));
+                }
+
+                // Render the unified table
+                renderUnifiedTable();
+
+            }).catch(error => console.error('Error syncing dashboard:', error));
         }
 
-        function updateParkingData() {
-            fetch('/api/parking-lots')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // NEW: Save to browser cache
-                        localStorage.setItem('cached_parking_lots', JSON.stringify(data.data));
-                        displayParkingLots(data.data);
-                    }
-                })
-                .catch(error => console.error('Error syncing parking lots:', error));
-        }
-
-        function updatePricingData() {
-            fetch('/api/pricing')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // NEW: Save to browser cache
-                        localStorage.setItem('cached_pricing', JSON.stringify(data.data));
-                        displayPricing(data.data);
-                    }
-                })
-                .catch(error => console.error('Error syncing pricing:', error));
-        }
-
-        function displayParkingLots(lots) {
-            const tbody = document.getElementById('lots-tbody');
+        function renderUnifiedTable() {
+            const tbody = document.getElementById('main-tbody');
             
-            // If body is empty (first load), clear the "Connecting..." message
+            // Clear "Connecting..." message if present
             if (tbody.innerHTML.includes('Connecting')) {
                 tbody.innerHTML = '';
             }
 
-            lots.forEach(lot => {
-                // Check for changes (Flash Logic)
+            latestLots.forEach(lot => {
+                // 1. Get Matching Pricing Data
+                const priceInfo = latestPricing[lot.id] || { current_price: 0, is_peak_hour: false };
+
+                // 2. Flash Logic (Visual Detection of Changes)
                 let flashClass = '';
                 const prev = previousState[lot.id];
-                
                 if (prev !== undefined) {
-                    if (lot.available_slots > prev) {
-                        flashClass = 'flash-green'; 
-                    } else if (lot.available_slots < prev) {
-                        flashClass = 'flash-red'; 
-                    }
+                    if (lot.available_slots > prev) flashClass = 'flash-green'; 
+                    else if (lot.available_slots < prev) flashClass = 'flash-red'; 
                 }
-                
                 previousState[lot.id] = lot.available_slots;
 
+                // 3. Status Badges Logic
                 const occupancyClass = lot.occupancy_rate > 80 ? 'high' : lot.occupancy_rate > 50 ? 'medium' : 'low';
+                
                 let statusText = 'Open';
                 let statusClass = 'status-available';
-                
                 if (lot.available_slots === 0) {
                     statusText = 'Full';
                     statusClass = 'status-full';
@@ -148,16 +126,21 @@
                     statusClass = 'status-limited';
                 }
 
-                // CHANGED: Added 'lot-row' class for easier selection
+                const rateText = priceInfo.is_peak_hour ? 'Peak Hour' : 'Standard';
+                const rateClass = priceInfo.is_peak_hour ? 'status-peak' : 'status-offpeak';
+
+                // 4. Build Row HTML
                 const rowHtml = `
                     <td><strong>${lot.name}</strong></td>
                     <td>${lot.location}</td>
-                    <td class="${flashClass}"><strong>${lot.available_slots}</strong></td>
-                    <td>${lot.total_slots}</td>
+                    <td class="${flashClass}"><strong>${lot.available_slots}</strong> / ${lot.total_slots}</td>
                     <td><span class="occupancy-badge occupancy-${occupancyClass}">${lot.occupancy_rate}%</span></td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td><strong>$${priceInfo.current_price.toFixed(2)}</strong>/hr</td>
+                    <td><span class="status-badge ${rateClass}">${rateText}</span></td>
                 `;
 
+                // 5. Update DOM efficiently
                 let existingRow = document.getElementById(`lot-row-${lot.id}`);
                 if (existingRow) {
                     existingRow.innerHTML = rowHtml;
@@ -170,50 +153,25 @@
             });
         }
 
-        function displayPricing(pricingData) {
-            const tbody = document.getElementById('pricing-tbody');
-            // Simple wipe and redraw for pricing
-            tbody.innerHTML = '';
-
-            pricingData.forEach(pricing => {
-                const statusText = pricing.is_peak_hour ? 'Peak Hour' : 'Standard';
-                const statusClass = pricing.is_peak_hour ? 'status-peak' : 'status-offpeak';
-
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td><strong>${pricing.parking_lot_name}</strong></td>
-                    <td>${pricing.location || 'N/A'}</td>
-                    <td><strong>$${pricing.current_price.toFixed(2)}</strong>/hour</td>
-                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                    <td>${pricing.occupancy_rate.toFixed(1)}%</td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        // NEW: Load Cached Data Immediately
+        // NEW: Load Cached Data Immediately (prevents white screen)
         function loadFromCache() {
             const cachedLots = localStorage.getItem('cached_parking_lots');
             const cachedPricing = localStorage.getItem('cached_pricing');
 
-            if (cachedLots) {
-                console.log("⚡ Loading parking from cache...");
-                displayParkingLots(JSON.parse(cachedLots));
-            }
+            if (cachedLots) latestLots = JSON.parse(cachedLots);
             if (cachedPricing) {
-                console.log("⚡ Loading pricing from cache...");
-                displayPricing(JSON.parse(cachedPricing));
+                const pData = JSON.parse(cachedPricing);
+                latestPricing = {};
+                pData.forEach(p => latestPricing[p.parking_lot_id] = p);
             }
+
+            if (latestLots.length > 0) renderUnifiedTable();
         }
 
-        // 1. Load Cache (Instant)
+        // Start Up
         loadFromCache();
-
-        // 2. Fetch Fresh Data (Async)
         updateDashboard();
-
-        // 3. Keep Refreshing
-        autoRefresh = setInterval(updateDashboard, 2000);
+        autoRefresh = setInterval(updateDashboard, 2000); // Check for incoming gateway data every 2s 
     </script>
 </body>
 </html>

@@ -25,12 +25,6 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/dashboard')
-def dashboard():
-    """Dashboard page showing parking availability"""
-    return render_template('dashboard.html')
-
-
 @app.route('/booking')
 def booking():
     """Booking page for reserving parking spots"""
