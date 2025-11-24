@@ -70,6 +70,16 @@ class DatabaseManager:
         with self.session_scope() as session:
             slot = session.query(ParkingSlot).filter(ParkingSlot.sensor_id == sensor_id).first()
             if slot:
+                if not is_occupied:
+                    has_active_booking = session.query(Booking).filter(
+                        Booking.slot_id == slot.id,
+                        Booking.status == 'active'
+                    ).count() > 0
+                    
+                    if has_active_booking:
+                        logger.info(f"Ignoring sensor 'Empty' signal for slot {slot.slot_number} due to active booking.")
+                        is_occupied = True # Force occupied status
+
                 old_status = slot.is_occupied
                 slot.is_occupied = is_occupied
                 slot.last_updated = datetime.now()
