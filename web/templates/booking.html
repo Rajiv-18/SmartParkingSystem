@@ -86,7 +86,6 @@
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
         let currentPricing = {};
-        // NEW: Get the max price passed from the backend
         const MAX_PRICE = {{ max_price }};
 
         console.log("🚀 Fetching booking data...");
@@ -156,7 +155,7 @@
             const duration = parseFloat(document.getElementById('duration').value) || 0;
             const pricePerHour = currentPricing[lotId] || 0;
 
-            // CHANGED: Calculate total and apply cap
+            // Calculate total and apply cap
             let rawTotal = pricePerHour * duration;
             let totalCost = rawTotal;
             let isCapped = false;
@@ -172,7 +171,7 @@
             const totalEl = document.getElementById('total-cost');
             totalEl.textContent = `$${totalCost.toFixed(2)}`;
 
-            // NEW: Visual indicator if price is capped
+            // Visual indicator if price is capped
             if (isCapped) {
                 totalEl.innerHTML += ` <span style="font-size: 0.8rem; color: #f59e0b;">(Daily Max)</span>`;
             }

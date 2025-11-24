@@ -189,19 +189,15 @@ def create_booking():
             if not lot_stat:
                 return jsonify({'success': False, 'error': 'Parking lot not found'}), 404
 
-            # CHANGED: Price Locking Logic
-            # If frontend sent a price, use it (Price Lock). Otherwise, calculate it.
+            # If frontend sent a price, use it (price lock). Otherwise, calculate it.
             if 'price_per_hour' in data:
                 price_per_hour = float(data['price_per_hour'])
                 _, is_peak = pricing_engine.calculate_price(lot_stat['occupancy_rate'])
             else:
                 price_per_hour, is_peak = pricing_engine.calculate_price(lot_stat['occupancy_rate'])
-            
-            # NEW: Calculate Total and Apply Cap
             raw_total = price_per_hour * duration_hours
-            total_price = min(raw_total, config.MAX_DAILY_PRICE) # Cap at $25
-            
-            # CHANGED: Use local time (EST) instead of utcnow
+            total_price = min(raw_total, config.MAX_DAILY_PRICE)
+
             start_time = datetime.now()
             end_time = start_time + timedelta(hours=duration_hours)
             
@@ -293,7 +289,7 @@ def complete_booking(booking_id):
                 
             # Complete booking
             booking.status = 'completed'
-            actual_end_time = datetime.now() # CHANGED: Local time
+            actual_end_time = datetime.now()
             
             # Calculate actual duration and price
             # Note: total_seconds returns seconds, divide by 3600 for hours
@@ -309,7 +305,7 @@ def complete_booking(booking_id):
             # Free the slot
             slot = booking.slot
             slot.is_occupied = False
-            slot.last_updated = datetime.now() # CHANGED: Local time
+            slot.last_updated = datetime.now()
             
             # Update parking lot available slots
             parking_lot = slot.parking_lot
@@ -475,7 +471,7 @@ def get_booking_init_data():
     """Get all data needed for booking page initialization in one request"""
     try:
         with db_manager.session_scope() as session:
-            # 1. Get Users (FIX: Manual serialization instead of to_dict)
+            # 1. Get Users
             users_query = session.query(User).all()
             users = []
             for u in users_query:
@@ -486,7 +482,7 @@ def get_booking_init_data():
                     'email': u.email
                 })
             
-            # 2. Get Parking Lots (FIX: Manual serialization)
+            # 2. Get Parking Lots
             lots_query = session.query(ParkingLot).all()
             lots = []
             for l in lots_query:

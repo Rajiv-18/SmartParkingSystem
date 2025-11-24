@@ -1,5 +1,3 @@
-/* Smart Parking System - Styles */
-
 :root {
     --primary-color: #2563eb;
     --secondary-color: #3b82f6;
@@ -75,7 +73,7 @@ body {
     background-color: var(--primary-color);
 }
 
-/* Hero Section - CHANGED: Shorter padding */
+/* Hero Section */
 .hero {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
     color: white;
@@ -148,7 +146,7 @@ body {
     width: 100%;
 }
 
-/* Table Animations - NEW */
+/* Table Animations */
 @keyframes flashGreen {
     0% { background-color: rgba(16, 185, 129, 0.3); }
     100% { background-color: transparent; }
